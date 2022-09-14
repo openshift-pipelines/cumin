@@ -1,8 +1,8 @@
 # cumin
 
-### what is cumin
+## what is cumin
 
-```
+```text
 Cumin (/ˈkjuːmɪn/ or US: /ˈkuːmɪn/, or /ˈkʌmɪn/)
 Cumin is a spice made from the dried seed of a plant known as Cuminum cyminum.
 ---
