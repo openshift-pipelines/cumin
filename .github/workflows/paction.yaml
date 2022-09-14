@@ -6,6 +6,6 @@ jobs:
     steps:
     - uses: concaf/paction@v1
       with:
-        openshift_token: {{ secrets.OPENSHIFT_TOKEN }}
-        openshift_server: {{ secrets.OPENSHIFT_SERVER }}
-        github_token: {{ secrets.GITHUB_TOKEN }}
+        openshift_token: ${{ secrets.OPENSHIFT_TOKEN }}
+        openshift_server: ${{ secrets.OPENSHIFT_SERVER }}
+        github_token: ${{ secrets.GITHUB_TOKEN }}
