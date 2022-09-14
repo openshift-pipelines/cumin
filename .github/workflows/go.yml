@@ -30,3 +30,4 @@ jobs:
         goos: linux
         goarch: amd64
         release_tag: dev
+        compress_assets: false
