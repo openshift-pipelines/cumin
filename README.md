@@ -1,6 +1,19 @@
 # cumin
-jira utils
-- clone an issue from github to jira
+
+### what is cumin
+```
+Cumin (/ˈkjuːmɪn/ or US: /ˈkuːmɪn/, or /ˈkʌmɪn/)
+Cumin is a spice made from the dried seed of a plant known as Cuminum cyminum.
+---
+जीरा
+/jīrā/
+In Indian English, jeera is the same as cumin.
+/jira, jIrA, jeeraa, jīrā/
+```
+cumin is a spice, but this tool is spicier :)
+
+`cumin` clones a github issue to your jira board, so you can track
+everything in one place.
 
 ### setup
 
