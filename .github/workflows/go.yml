@@ -31,3 +31,4 @@ jobs:
         goarch: amd64
         release_tag: dev
         compress_assets: false
+        overwrite: true
