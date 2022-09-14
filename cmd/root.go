@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"os"
+	"strconv"
 
 	"github.com/spf13/cobra"
 )
@@ -30,18 +32,25 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&jiraBaseURL, "base", "", "jira base url")
+	rootCmd.PersistentFlags().StringVar(&jiraBaseURL, "base", os.Getenv("JIRA_BASE_URL"), "jira base url (env: JIRA_BASE_URL)")
 	if err := rootCmd.MarkPersistentFlagRequired("base"); err != nil {
-		return
+		log.Fatal(err)
 	}
 
-	rootCmd.PersistentFlags().IntVar(&jiraBoardID, "board-id", 0, "jira board id")
+	defaultJiraBoardID := 0
+	if os.Getenv("JIRA_BOARD_ID") != "" {
+		var err error
+		if defaultJiraBoardID, err = strconv.Atoi(os.Getenv("JIRA_BOARD_ID")); err != nil {
+			log.Fatal(err)
+		}
+	}
+	rootCmd.PersistentFlags().IntVar(&jiraBoardID, "board-id", defaultJiraBoardID, "jira board id (env: JIRA_BOARD_ID)")
 	if err := rootCmd.MarkPersistentFlagRequired("board-id"); err != nil {
 		return
 	}
 
-	rootCmd.PersistentFlags().StringVarP(&jiraProject, "project", "p", "", "jira project to clone the issue into")
+	rootCmd.PersistentFlags().StringVarP(&jiraProject, "project", "p", os.Getenv("JIRA_PROJECT"), "jira project to clone the issue into (env: JIRA_PROJECT)")
 	if err := rootCmd.MarkFlagRequired("project"); err != nil {
-		return
+		log.Fatal(err)
 	}
 }
