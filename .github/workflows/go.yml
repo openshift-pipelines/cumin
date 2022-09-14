@@ -7,19 +7,25 @@ on:
     branches: [ "main" ]
 
 jobs:
-
   build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
         go-version: 1.19
-
     - name: Build
       run: go build -v ./...
-
     - name: Test
       run: go test -v ./...
+  publish-main:
+    name: publish binary on every push to main
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: wangyoucao577/go-release-action@v1.31
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        goos: linux
+        goarch: amd64
