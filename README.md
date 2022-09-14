@@ -1,6 +1,7 @@
 # cumin
 
 ### what is cumin
+
 ```
 Cumin (/ˈkjuːmɪn/ or US: /ˈkuːmɪn/, or /ˈkʌmɪn/)
 Cumin is a spice made from the dried seed of a plant known as Cuminum cyminum.
@@ -10,6 +11,7 @@ Cumin is a spice made from the dried seed of a plant known as Cuminum cyminum.
 In Indian English, jeera is the same as cumin.
 /jira, jIrA, jeeraa, jīrā/
 ```
+
 cumin is a spice, but this tool is spicier :)
 
 `cumin` clones a github issue to your jira board, so you can track
@@ -19,7 +21,7 @@ everything in one place.
 
 - create a github [personal access token](https://github.com/settings/tokens)
   and store it in the environment variable `GITHUB_TOKEN`
-- create a [jira personal access token](https://issues.redhat.com/secure/ViewProfile.jspa?selectedTab=com.atlassian.pats.pats-plugin:jira-user-personal-access-tokens) and store it in the 
+- create a [jira personal access token](https://issues.redhat.com/secure/ViewProfile.jspa?selectedTab=com.atlassian.pats.pats-plugin:jira-user-personal-access-tokens) and store it in the
   environment variable `JIRA_TOKEN`
 
 ### usage
@@ -84,3 +86,6 @@ Global Flags:
       --board-id int     jira board id
   -p, --project string   jira project to clone the issue into
 ```
+
+the environment variable `JIRA_BOARD_ID`, `JIRA_PROJECT`, `JIRA_BASE_URL` will
+be respected unless overriden by their corresponding flag.
