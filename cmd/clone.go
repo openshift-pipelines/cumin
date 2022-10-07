@@ -83,7 +83,7 @@ cumin clone https://github.com/concaf/cumin/issues/2455 \
 }
 
 func init() {
-	rootCmd.AddCommand(cloneCmd)
+	jiraCmd.AddCommand(cloneCmd)
 
 	cloneCmd.Flags().StringArrayVarP(&labels, "labels", "l", nil, "labels to add to the jira issue")
 
