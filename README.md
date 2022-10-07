@@ -12,10 +12,7 @@ In Indian English, jeera is the same as cumin.
 /jira, jIrA, jeeraa, jīrā/
 ```
 
-cumin is a spice, but this tool is spicier :)
-
-`cumin` clones a github issue to your jira board, so you can track
-everything in one place.
+cumin is a spice, but this tool is spicier for everything p12n :)
 
 ### setup
 
