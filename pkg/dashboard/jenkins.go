@@ -44,6 +44,11 @@ func GenerateEndToEndFlow(username, password, baseUrl, cvpUrl, checkMergedNum st
 		CheckMerged: checkMerged,
 	}
 
+	if checkMerged.Result != "success" {
+		log.Printf("check-merged %v did not succeed, skipping further...", checkMerged.Url)
+		return &e2eFlow, nil
+	}
+
 	// let's find a matching build-pipeline now
 	latestBuildPipelineUrl, err := url.JoinPath(baseUrl, "job/build-pipeline/lastBuild")
 	if err != nil {
