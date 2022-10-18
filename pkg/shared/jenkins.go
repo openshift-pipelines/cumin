@@ -12,7 +12,11 @@ import (
 type JenkinsBuild struct {
 	Actions []struct {
 		Causes []struct {
+			Class            string `json:"_class"`
 			ShortDescription string `json:"shortDescription"`
+			UpstreamBuild    int    `json:"upstreamBuild"`
+			UpstreamProject  string `json:"upstreamProject"`
+			UpstreamUrl      string `json:"upstreamUrl"`
 		} `json:"causes"`
 	} `json:"actions"`
 	Building        bool   `json:"building"`
@@ -29,38 +33,77 @@ type JenkinsBuild struct {
 	} `json:"previousBuild"`
 }
 
-func GetBuildJSONFromURL(buildURL, username, password string) (*JenkinsBuild, error) {
+type JenkinsListView struct {
+	Class       string `json:"_class"`
+	Description string `json:"description"`
+	Jobs        []struct {
+		Class string `json:"_class"`
+		Name  string `json:"name"`
+		URL   string `json:"url"`
+		Color string `json:"color"`
+	} `json:"jobs"`
+	Name     string        `json:"name"`
+	Property []interface{} `json:"property"`
+	URL      string        `json:"url"`
+}
+
+func GetListViewJson(listViewUrl, username, password string) (*JenkinsListView, error) {
+	listViewUrl, err := url.JoinPath(listViewUrl, "/api/json")
+	if err != nil {
+		return nil, err
+	}
+
+	var listView JenkinsListView
+	err = GetJenkinsJson(listViewUrl, username, password, &listView)
+	if err != nil {
+		return nil, err
+	}
+
+	return &listView, nil
+}
+
+func GetBuildJson(buildURL, username, password string) (*JenkinsBuild, error) {
 	buildURL, err := url.JoinPath(buildURL, "/api/json")
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("fetching json from %v", buildURL)
+
+	var build JenkinsBuild
+	err = GetJenkinsJson(buildURL, username, password, &build)
+	if err != nil {
+		return nil, err
+	}
+
+	return &build, nil
+}
+
+func GetJenkinsJson(jenkinsUrl, username, password string, unmarshalTo interface{}) error {
+	log.Printf("fetching json from %v", jenkinsUrl)
 
 	client := &http.Client{
 		Timeout: time.Second * 20,
 	}
-	req, err := http.NewRequest("GET", buildURL, nil)
+	req, err := http.NewRequest("GET", jenkinsUrl, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// set up basic auth
 	req.SetBasicAuth(username, password)
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	var build JenkinsBuild
-	if err := json.Unmarshal(body, &build); err != nil {
-		return nil, err
+	if err := json.Unmarshal(body, unmarshalTo); err != nil {
+		return err
 	}
 
-	return &build, nil
+	return nil
 }
