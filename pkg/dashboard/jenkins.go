@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/concaf/cumin/pkg/shared"
+	"io"
 	"log"
+	"net/http"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -16,6 +18,7 @@ type EndToEndFlow struct {
 	BuildPipelineChildren []*JenkinsBuildView
 	ReleasePipeline       *JenkinsBuildView
 	CVPPipeline           *JenkinsBuildView
+	IndexImages           []string
 }
 
 type JenkinsBuildView struct {
@@ -148,6 +151,10 @@ func GenerateEndToEndFlow(username, password, baseUrl, cvpUrl, checkMergedNum st
 		return nil, err
 	}
 
+	if operatorBundleBuild == nil {
+		log.Printf("no operator-bundle build found for build-pipeline %v", buildPipeline.Url)
+		return &e2eFlow, nil
+	}
 	matchingCVPBuild, err := findCVPFromBundleJob(cvpJobUrl, operatorBundleBuild)
 	if err != nil {
 		return nil, err
@@ -158,6 +165,26 @@ func GenerateEndToEndFlow(username, password, baseUrl, cvpUrl, checkMergedNum st
 			return nil, err
 		}
 		e2eFlow.CVPPipeline = cvpBuildView
+
+		if cvpBuildView.Result == "success" {
+			indexImagesUrl, err := url.JoinPath(matchingCVPBuild, "artifact/index_images.yml")
+			if err != nil {
+				return nil, err
+			}
+			log.Printf("looking up index images at %v", indexImagesUrl)
+			resp, err := http.Get(indexImagesUrl)
+			if err != nil {
+				// we don't want to fail here
+				log.Println(err)
+			} else {
+				indexImagesBytes, err := io.ReadAll(resp.Body)
+				log.Printf("index images: %v", string(indexImagesBytes))
+				if err != nil {
+					return nil, err
+				}
+				e2eFlow.IndexImages = strings.Split(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(string(indexImagesBytes), "[", ""), "]", ""), "'", ""), ",", ""), "\n", ""), "  ", " "), " ")
+			}
+		}
 	} else {
 		log.Printf("could not find a matching CVP build for %v", operatorBundleBuild.URL)
 	}

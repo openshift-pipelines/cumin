@@ -60,7 +60,7 @@ func GetListViewJson(listViewUrl, username, password string) (*JenkinsListView, 
 	}
 
 	var listView JenkinsListView
-	err = GetJenkinsJson(listViewUrl, username, password, &listView)
+	err = GetAndUnmarshalUrl(listViewUrl, username, password, &listView)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func GetBuildJson(buildURL, username, password string) (*JenkinsBuild, error) {
 	}
 
 	var build JenkinsBuild
-	err = GetJenkinsJson(buildURL, username, password, &build)
+	err = GetAndUnmarshalUrl(buildURL, username, password, &build)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func GetBuildJson(buildURL, username, password string) (*JenkinsBuild, error) {
 	return &build, nil
 }
 
-func GetJenkinsJson(jenkinsUrl, username, password string, unmarshalTo interface{}) error {
+func GetAndUnmarshalUrl(jenkinsUrl, username, password string, unmarshalTo interface{}) error {
 	log.Printf("fetching json from %v", jenkinsUrl)
 
 	client := &http.Client{
