@@ -42,6 +42,8 @@ func init() {
 	e2eflowCmd.Flags().StringVar(&baseUrl, "base", "", "base url of jenkins job, e.g. https://<jenkins url>/job/pipelines-1.8-rhel-8/")
 	e2eflowCmd.MarkFlagRequired("base")
 
-	e2eflowCmd.Flags().StringVar(&baseUrl, "cvp", "", "url of cvp jenkins")
+	e2eflowCmd.Flags().StringVar(&cvpUrl, "cvp", "", "url of cvp jenkins, e.g. https://<jenkins url>/view/all/job/cvp-redhat-operator-bundle-image-validation-test/")
+	e2eflowCmd.MarkFlagRequired("cvp")
+
 	e2eflowCmd.Flags().StringVar(&checkMergedNum, "check-merged", "lastBuild", "number of check-merged job")
 }

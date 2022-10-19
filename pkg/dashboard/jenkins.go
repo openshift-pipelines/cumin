@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/concaf/cumin/pkg/shared"
 	"log"
@@ -14,6 +15,7 @@ type EndToEndFlow struct {
 	BuildPipeline         *JenkinsBuildView
 	BuildPipelineChildren []*JenkinsBuildView
 	ReleasePipeline       *JenkinsBuildView
+	CVPPipeline           *JenkinsBuildView
 }
 
 type JenkinsBuildView struct {
@@ -90,6 +92,7 @@ func GenerateEndToEndFlow(username, password, baseUrl, cvpUrl, checkMergedNum st
 		return &e2eFlow, nil
 	}
 
+	var operatorBundleBuild *shared.JenkinsBuild
 	for _, job := range childJobs {
 		log.Printf("parsing child job: %v", job)
 		lastJobBuild, err := url.JoinPath(job, "lastBuild")
@@ -107,6 +110,9 @@ func GenerateEndToEndFlow(username, password, baseUrl, cvpUrl, checkMergedNum st
 			return nil, err
 		}
 		if jobUrl != "" {
+			if strings.Contains(jobUrl, "job/openshift-pipelines-operator-bundle") {
+				operatorBundleBuild = jobBuildJson
+			}
 			jobBuildView, err := GetBuildView(jobUrl, username, password)
 			if err != nil {
 				return nil, err
@@ -136,7 +142,92 @@ func GenerateEndToEndFlow(username, password, baseUrl, cvpUrl, checkMergedNum st
 		e2eFlow.ReleasePipeline = releasePipelineView
 	}
 
+	// let's match cvp build now
+	cvpJobUrl, err := url.JoinPath(cvpUrl, "lastBuild")
+	if err != nil {
+		return nil, err
+	}
+
+	matchingCVPBuild, err := findCVPFromBundleJob(cvpJobUrl, operatorBundleBuild)
+	if err != nil {
+		return nil, err
+	}
+	if matchingCVPBuild != "" {
+		cvpBuildView, err := GetBuildView(matchingCVPBuild, "", "")
+		if err != nil {
+			return nil, err
+		}
+		e2eFlow.CVPPipeline = cvpBuildView
+	} else {
+		log.Printf("could not find a matching CVP build for %v", operatorBundleBuild.URL)
+	}
+
 	return &e2eFlow, nil
+}
+
+// findCVPFromBundleJob we don't need creds to talk to cvp
+// cvpUrl := https://<jenkins url>/view/all/job/cvp-redhat-operator-bundle-image-validation-test/
+func findCVPFromBundleJob(cvpJobUrl string, operatorBundleBuild *shared.JenkinsBuild) (string, error) {
+	type brewBuildNVR struct {
+		NVR string `json:"nvr"`
+	}
+
+	log.Printf("will cvp pipeline (%v) match operator-bundle-build %v ?", cvpJobUrl, operatorBundleBuild.FullDisplayName)
+	var nvr string
+	for _, action := range operatorBundleBuild.Actions {
+		if strings.Contains(action.Class, "ParametersAction") {
+			for _, param := range action.Parameters {
+				if param.Name == "brew_build_info" {
+					brewNVR := brewBuildNVR{}
+					brewBuildRawJson := strings.ReplaceAll(param.Value.(string), "\\", "")
+					err := json.Unmarshal([]byte(brewBuildRawJson), &brewNVR)
+					if err != nil {
+						return "", err
+					}
+					nvr = brewNVR.NVR
+					break
+				}
+			}
+			if nvr != "" {
+				break
+			}
+		}
+	}
+	if nvr == "" {
+		return "", fmt.Errorf("could not find nvr in brew_build_info parameter in build %v", operatorBundleBuild.URL)
+	}
+
+	cvpBuildJson, err := shared.GetBuildJson(cvpJobUrl, "", "")
+	if err != nil {
+		return "", err
+	}
+
+	cvpBuildFound := false
+	for _, action := range cvpBuildJson.Actions {
+		if strings.Contains(action.Class, "ParametersAction") {
+			for _, param := range action.Parameters {
+				if param.Name == "CVP_PRODUCT_BREW_NVR" {
+					if nvr == param.Value.(string) {
+						cvpBuildFound = true
+						break
+					}
+				}
+			}
+			if cvpBuildFound {
+				break
+			}
+		}
+	}
+
+	if !cvpBuildFound {
+		if cvpBuildJson.PreviousBuild.Number > 0 && cvpBuildJson.PreviousBuild.URL != "" {
+			return findCVPFromBundleJob(cvpBuildJson.PreviousBuild.URL, operatorBundleBuild)
+		} else {
+			log.Printf("could not find matching cvp build for %v", operatorBundleBuild.FullDisplayName)
+			return "", nil
+		}
+	}
+	return cvpBuildJson.URL, nil
 }
 
 func matchBuildWithParent(username, password, parentJobName string, parentBuildNumber int, childBuild *shared.JenkinsBuild) (string, error) {
@@ -159,7 +250,7 @@ func matchBuildWithParent(username, password, parentJobName string, parentBuildN
 	}
 	if !childBuildFound {
 		// if the previous build exists, try to match it
-		if childBuild.PreviousBuild.Number > 0 {
+		if childBuild.PreviousBuild.Number > 0 && childBuild.PreviousBuild.URL != "" {
 			previousBuildPipelineJson, err := shared.GetBuildJson(childBuild.PreviousBuild.URL, username, password)
 			if err != nil {
 				return "", err

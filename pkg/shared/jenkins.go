@@ -11,6 +11,12 @@ import (
 
 type JenkinsBuild struct {
 	Actions []struct {
+		Class      string `json:"_class,omitempty"`
+		Parameters []struct {
+			Class string      `json:"_class"`
+			Name  string      `json:"name"`
+			Value interface{} `json:"value"`
+		} `json:"parameters,omitempty"`
 		Causes []struct {
 			Class            string `json:"_class"`
 			ShortDescription string `json:"shortDescription"`
@@ -88,8 +94,10 @@ func GetJenkinsJson(jenkinsUrl, username, password string, unmarshalTo interface
 		return err
 	}
 
-	// set up basic auth
-	req.SetBasicAuth(username, password)
+	if username != "" && password != "" {
+		// set up basic auth
+		req.SetBasicAuth(username, password)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
