@@ -186,13 +186,22 @@ func getChildJobUrls(username, password, listViewUrl string) ([]string, error) {
 	return urls, nil
 }
 
-func GetBuildView(url, username, password string) (*JenkinsBuildView, error) {
-	build, err := shared.GetBuildJson(url, username, password)
+func GetBuildView(jobUrl, username, password string) (*JenkinsBuildView, error) {
+	parsedUrl, err := url.Parse(jobUrl)
 	if err != nil {
 		return nil, err
 	}
 
+	build, err := shared.GetBuildJson(jobUrl, username, password)
+	if err != nil {
+		return nil, err
+	}
+
+	splitUrl := strings.Split(parsedUrl.Path, "/job/")
+	nameAndJob := splitUrl[len(splitUrl)-1]
+
 	buildView := JenkinsBuildView{
+		Name:     nameAndJob,
 		Number:   build.Number,
 		Logs:     filepath.Join(build.URL, "consoleFull"),
 		Result:   strings.ToLower(build.Result),
@@ -222,7 +231,6 @@ func GenerateBuildViews(url, username, password string) ([]JenkinsBuildView, err
 	if err != nil {
 		return nil, err
 	}
-	currentBuildView.Name = "current build"
 	buildViews = append(buildViews, *currentBuildView)
 
 	if currentBuildView.Previous != "" {
@@ -230,7 +238,6 @@ func GenerateBuildViews(url, username, password string) ([]JenkinsBuildView, err
 		if err != nil {
 			return nil, err
 		}
-		previousBuildView.Name = "previous build"
 		buildViews = append(buildViews, *previousBuildView)
 	}
 
