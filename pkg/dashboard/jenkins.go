@@ -40,16 +40,28 @@ type JenkinsBuildView struct {
 	Cause    string
 	Url      string
 	Previous string
+	Extra    interface{}
 }
 
-// GenerateEndToEndFlow
-// baseUrl is something like https://<jenkins url>/job/pipelines-1.8-rhel-8/
-func GenerateEndToEndFlow(username, password, baseUrl, cvpUrl, checkMergedNum string) (*EndToEndFlow, error) {
-	checkMergedUrl, err := url.JoinPath(baseUrl, "job/openshift-pipelines/job/check-merged/", checkMergedNum)
-	if err != nil {
-		return nil, err
+func GenerateEndToEndFlow(username, password, baseUrl, cvpUrl, checkMergedUrl string, generateNum int) ([]EndToEndFlow, error) {
+	var e2eFlows []EndToEndFlow
+	for i := 1; i <= generateNum; i++ {
+		e2eFlow, err := GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMergedUrl)
+		if err != nil {
+			return nil, err
+		}
+		e2eFlows = append(e2eFlows, *e2eFlow)
+		if e2eFlow.CheckMerged.Previous == "" {
+			break
+		}
+		checkMergedUrl = e2eFlow.CheckMerged.Previous
 	}
+	return e2eFlows, nil
+}
 
+// GenerateEndToEndFlowSingle
+// baseUrl is something like https://<jenkins url>/job/pipelines-1.8-rhel-8/
+func GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMergedUrl string) (*EndToEndFlow, error) {
 	checkMerged, err := GetBuildView(checkMergedUrl, username, password)
 	if err != nil {
 		return nil, err
@@ -131,7 +143,10 @@ func GenerateEndToEndFlow(username, password, baseUrl, cvpUrl, checkMergedNum st
 		}
 		if jobUrl != "" {
 			if strings.Contains(jobUrl, "job/openshift-pipelines-operator-bundle") {
-				operatorBundleBuild = jobBuildJson
+				operatorBundleBuild, err = shared.GetBuildJson(jobUrl, username, password)
+				if err != nil {
+					return nil, err
+				}
 			}
 			jobBuildView, err := GetBuildView(jobUrl, username, password)
 			if err != nil {
@@ -184,29 +199,41 @@ func GenerateEndToEndFlow(username, password, baseUrl, cvpUrl, checkMergedNum st
 		e2eFlow.CVPPipeline = cvpBuildView
 
 		if cvpBuildView.Result == "success" {
-			indexImagesUrl, err := url.JoinPath(matchingCVPBuild, "artifact/index_images.yml")
+			indexImages, err := GetIndexImagesFromUrl(matchingCVPBuild)
 			if err != nil {
 				return nil, err
 			}
-			log.Printf("looking up index images at %v", indexImagesUrl)
-			resp, err := http.Get(indexImagesUrl)
-			if err != nil {
-				// we don't want to fail here
-				log.Println(err)
-			} else {
-				indexImagesBytes, err := io.ReadAll(resp.Body)
-				log.Printf("index images: %v", string(indexImagesBytes))
-				if err != nil {
-					return nil, err
-				}
-				e2eFlow.IndexImages = strings.Split(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(string(indexImagesBytes), "[", ""), "]", ""), "'", ""), ",", ""), "\n", ""), "  ", " "), " ")
-			}
+			e2eFlow.IndexImages = indexImages
 		}
 	} else {
 		log.Printf("could not find a matching CVP build for %v", operatorBundleBuild.URL)
 	}
 
 	return &e2eFlow, nil
+}
+
+func GetIndexImagesFromUrl(cvpJobUrl string) ([]string, error) {
+	indexImagesUrl, err := url.JoinPath(cvpJobUrl, "artifact/index_images.yml")
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("looking up index images at %v", indexImagesUrl)
+	resp, err := http.Get(indexImagesUrl)
+	if err != nil {
+		// don't fail here
+		return nil, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("expected 200 OK for index builds, got %v", resp.StatusCode)
+	}
+	indexImagesBytes, err := io.ReadAll(resp.Body)
+	log.Printf("index images: %v", string(indexImagesBytes))
+	if err != nil {
+		return nil, err
+	}
+	indexImages := strings.Split(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(string(indexImagesBytes), "[", ""), "]", ""), "'", ""), ",", ""), "\n", ""), "  ", " "), " ")
+
+	return indexImages, nil
 }
 
 func getMRFromCheckMerged(username, password, checkMergedUrl string) (*GitLabMergeRequest, error) {
@@ -414,21 +441,21 @@ func GetBuildView(jobUrl, username, password string) (*JenkinsBuildView, error) 
 	return &buildView, nil
 }
 
-func GenerateBuildViews(url, username, password string) ([]JenkinsBuildView, error) {
-	var buildViews []JenkinsBuildView
-	currentBuildView, err := GetBuildView(url, username, password)
-	if err != nil {
-		return nil, err
-	}
-	buildViews = append(buildViews, *currentBuildView)
+func GenerateBuildViews(jobUrl, username, password string, generateNum int) ([]*JenkinsBuildView, error) {
+	var buildViews []*JenkinsBuildView
 
-	if currentBuildView.Previous != "" {
-		previousBuildView, err := GetBuildView(currentBuildView.Previous, username, password)
+	for i := 1; i <= generateNum; i++ {
+		currentBuildView, err := GetBuildView(jobUrl, username, password)
 		if err != nil {
 			return nil, err
 		}
-		buildViews = append(buildViews, *previousBuildView)
+		buildViews = append(buildViews, currentBuildView)
+
+		if currentBuildView.Previous == "" {
+			break
+		}
+		jobUrl = currentBuildView.Previous
 	}
 
-	return buildViews, err
+	return buildViews, nil
 }

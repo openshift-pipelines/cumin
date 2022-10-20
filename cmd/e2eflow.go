@@ -8,14 +8,17 @@ import (
 	"github.com/concaf/cumin/pkg/dashboard"
 	"gopkg.in/yaml.v3"
 	"log"
+	"net/url"
 
 	"github.com/spf13/cobra"
 )
 
 var (
-	baseUrl        string
-	cvpUrl         string
-	checkMergedNum string
+	baseUrl             string
+	cvpUrl              string
+	checkMergedNum      string
+	generateNum         int
+	lastSuccessfulBuild bool
 )
 
 // e2eflowCmd represents the e2eflow command
@@ -23,10 +26,35 @@ var e2eflowCmd = &cobra.Command{
 	Use:   "e2eflow",
 	Short: "e2eflow of a check-merged job",
 	Run: func(cmd *cobra.Command, args []string) {
-		e2eFlow, err := dashboard.GenerateEndToEndFlow(jenkinsUsername, jenkinsPassword, baseUrl, cvpUrl, checkMergedNum)
+		checkMergedUrl, err := url.JoinPath(baseUrl, "job/openshift-pipelines/job/check-merged/", checkMergedNum)
 		if err != nil {
 			log.Fatal(err)
 		}
+		e2eFlow, err := dashboard.GenerateEndToEndFlow(jenkinsUsername, jenkinsPassword, baseUrl, cvpUrl, checkMergedUrl, generateNum)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		successfulPresent := false
+		for _, build := range e2eFlow {
+			if build.CheckMerged.Result == "success" {
+				successfulPresent = true
+				break
+			}
+		}
+		// we don't want lastSuccessfulBuild if there is already one inside there
+		if lastSuccessfulBuild && !successfulPresent {
+			lastSuccessfulUrl, err := url.JoinPath(baseUrl, "job/openshift-pipelines/job/check-merged/lastSuccessfulBuild")
+			if err != nil {
+				log.Fatal(err)
+			}
+			lastSuccessfulFlow, err := dashboard.GenerateEndToEndFlowSingle(jenkinsUsername, jenkinsPassword, baseUrl, cvpUrl, lastSuccessfulUrl)
+			if err != nil {
+				log.Fatal(err)
+			}
+			e2eFlow = append(e2eFlow, *lastSuccessfulFlow)
+		}
+
 		e2eFlowYaml, err := yaml.Marshal(e2eFlow)
 		if err != nil {
 			log.Fatal(err)
@@ -46,4 +74,6 @@ func init() {
 	e2eflowCmd.MarkFlagRequired("cvp")
 
 	e2eflowCmd.Flags().StringVar(&checkMergedNum, "check-merged", "lastBuild", "number of check-merged job")
+	e2eflowCmd.Flags().IntVar(&generateNum, "generate-num", 3, "number of builds to generate")
+	e2eflowCmd.Flags().BoolVar(&lastSuccessfulBuild, "last-successful-build", true, "do you want to generate the last successful build as well?")
 }
