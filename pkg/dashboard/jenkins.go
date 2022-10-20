@@ -4,15 +4,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/concaf/cumin/pkg/shared"
+	"github.com/xanzy/go-gitlab"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
+type GitLabMergeRequest struct {
+	Id    int
+	URL   string
+	Title string
+}
+
 type EndToEndFlow struct {
+	GitlabMR              *GitLabMergeRequest
 	CheckMerged           *JenkinsBuildView
 	BuildPipeline         *JenkinsBuildView
 	BuildPipelineChildren []*JenkinsBuildView
@@ -48,6 +57,14 @@ func GenerateEndToEndFlow(username, password, baseUrl, cvpUrl, checkMergedNum st
 	e2eFlow := EndToEndFlow{
 		CheckMerged: checkMerged,
 	}
+
+	glMr, err := getMRFromCheckMerged(username, password, checkMergedUrl)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Printf("gitlab mr data: %v", glMr)
+	e2eFlow.GitlabMR = glMr
 
 	if checkMerged.Result != "success" {
 		log.Printf("check-merged %v did not succeed, skipping further...", checkMerged.Url)
@@ -190,6 +207,60 @@ func GenerateEndToEndFlow(username, password, baseUrl, cvpUrl, checkMergedNum st
 	}
 
 	return &e2eFlow, nil
+}
+
+func getMRFromCheckMerged(username, password, checkMergedUrl string) (*GitLabMergeRequest, error) {
+	checkMergedJson, err := shared.GetBuildJson(checkMergedUrl, username, password)
+	if err != nil {
+		return nil, err
+	}
+
+	var mrIdString, repoUrl string
+	for _, action := range checkMergedJson.Actions {
+		for _, param := range action.Parameters {
+			if param.Name == "gitlabMergeRequestIid" {
+				mrIdString = param.Value.(string)
+			}
+			if param.Name == "gitlabTargetRepoHttpUrl" {
+				// we don't want the trailing .git in the url
+				repoUrl = strings.TrimSuffix(param.Value.(string), ".git")
+			}
+		}
+	}
+	if mrIdString == "" || repoUrl == "" {
+		log.Printf("could not find mr id (%v) or repo url (%v)", mrIdString, repoUrl)
+		return nil, nil
+	}
+
+	glMr := GitLabMergeRequest{}
+	mrIdInt, err := strconv.Atoi(mrIdString)
+	if err != nil {
+		return nil, err
+	}
+	glMr.Id = mrIdInt
+	// e.g. https://gitlab.cee.redhat.com/tekton/p12n/-/merge_requests/361
+	mrUrl, err := url.JoinPath(repoUrl, "/-/merge_requests/", mrIdString)
+	if err != nil {
+		return nil, err
+	}
+	glMr.URL = mrUrl
+
+	parsedUrl, err := url.Parse(repoUrl)
+	if err != nil {
+		return nil, err
+	}
+
+	gitlabClient, err := gitlab.NewClient("", gitlab.WithBaseURL(fmt.Sprintf("%v://%v", parsedUrl.Scheme, parsedUrl.Host)))
+	if err != nil {
+		return nil, err
+	}
+	glMrObj, _, err := gitlabClient.MergeRequests.GetMergeRequest(strings.Trim(parsedUrl.Path, "/"), mrIdInt, nil)
+	if err != nil {
+		return nil, err
+	}
+	glMr.Title = glMrObj.Title
+
+	return &glMr, nil
 }
 
 // findCVPFromBundleJob we don't need creds to talk to cvp
