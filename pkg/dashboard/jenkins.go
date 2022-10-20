@@ -184,7 +184,11 @@ func GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMerged
 	}
 
 	if operatorBundleBuild == nil {
-		log.Printf("no operator-bundle build found for build-pipeline %v", buildPipeline.Url)
+		log.Printf("no operator-bundle build found for build-pipeline (%v)", buildPipeline.Url)
+		return &e2eFlow, nil
+	}
+	if strings.ToLower(operatorBundleBuild.Result) != "success" {
+		log.Printf("operator-bundle build (%v) found for build-pipeline (%v) failed (%v)", operatorBundleBuild.URL, buildPipeline.Url, operatorBundleBuild.Result)
 		return &e2eFlow, nil
 	}
 	matchingCVPBuild, err := findCVPFromBundleJob(cvpJobUrl, operatorBundleBuild)
