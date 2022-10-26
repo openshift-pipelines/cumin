@@ -60,7 +60,7 @@ func GetListViewJson(listViewUrl, username, password string) (*JenkinsListView, 
 	}
 
 	var listView JenkinsListView
-	err = GetAndUnmarshalUrl(listViewUrl, username, password, &listView)
+	_, err = GetAndUnmarshalUrl(listViewUrl, username, password, &listView)
 	if err != nil {
 		return nil, err
 	}
@@ -68,22 +68,23 @@ func GetListViewJson(listViewUrl, username, password string) (*JenkinsListView, 
 	return &listView, nil
 }
 
-func GetBuildJson(buildURL, username, password string) (*JenkinsBuild, error) {
+// GetBuildJson returns Build, status code, error
+func GetBuildJson(buildURL, username, password string) (*JenkinsBuild, int, error) {
 	buildURL, err := url.JoinPath(buildURL, "/api/json")
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	var build JenkinsBuild
-	err = GetAndUnmarshalUrl(buildURL, username, password, &build)
+	statusCode, err := GetAndUnmarshalUrl(buildURL, username, password, &build)
 	if err != nil {
-		return nil, err
+		return nil, statusCode, err
 	}
 
-	return &build, nil
+	return &build, statusCode, nil
 }
 
-func GetAndUnmarshalUrl(jenkinsUrl, username, password string, unmarshalTo interface{}) error {
+func GetAndUnmarshalUrl(jenkinsUrl, username, password string, unmarshalTo interface{}) (int, error) {
 	log.Printf("fetching json from %v", jenkinsUrl)
 
 	client := &http.Client{
@@ -91,7 +92,7 @@ func GetAndUnmarshalUrl(jenkinsUrl, username, password string, unmarshalTo inter
 	}
 	req, err := http.NewRequest("GET", jenkinsUrl, nil)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if username != "" && password != "" {
@@ -100,18 +101,30 @@ func GetAndUnmarshalUrl(jenkinsUrl, username, password string, unmarshalTo inter
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer resp.Body.Close()
 
+	if !IsStatusCodeOK(resp.StatusCode) {
+		log.Printf("non-OK status code (%v) for url: %v", resp.StatusCode, jenkinsUrl)
+		return resp.StatusCode, nil
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return resp.StatusCode, err
 	}
 
 	if err := json.Unmarshal(body, unmarshalTo); err != nil {
-		return err
+		return resp.StatusCode, err
 	}
 
-	return nil
+	return resp.StatusCode, nil
+}
+
+func IsStatusCodeOK(statusCode int) bool {
+	if statusCode < 200 || statusCode >= 300 {
+		return false
+	}
+	return true
 }
