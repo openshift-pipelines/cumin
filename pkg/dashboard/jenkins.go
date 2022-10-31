@@ -31,16 +31,17 @@ type EndToEndFlow struct {
 }
 
 type JenkinsBuildView struct {
-	Name     string
-	Number   int
-	Logs     string
-	Result   string
-	Running  bool
-	Duration int
-	Cause    string
-	Url      string
-	Previous string
-	Extra    interface{}
+	Name        string
+	Number      int
+	Logs        string
+	Result      string
+	Running     bool
+	Duration    int
+	Cause       string
+	Url         string
+	Previous    string
+	DisplayName string
+	Extra       interface{}
 }
 
 func GenerateEndToEndFlow(username, password, baseUrl, cvpUrl, checkMergedUrl string, generateNum int) ([]EndToEndFlow, error) {
@@ -450,13 +451,14 @@ func GetBuildView(jobUrl, username, password string) (*JenkinsBuildView, error) 
 	nameAndJob := splitUrl[len(splitUrl)-1]
 
 	buildView := JenkinsBuildView{
-		Name:     nameAndJob,
-		Number:   build.Number,
-		Logs:     filepath.Join(build.URL, "consoleFull"),
-		Result:   strings.ToLower(build.Result),
-		Running:  build.Building,
-		Duration: (build.Duration / 1000) / 60,
-		Url:      build.URL,
+		Name:        nameAndJob,
+		Number:      build.Number,
+		Logs:        filepath.Join(build.URL, "consoleFull"),
+		Result:      strings.ToLower(build.Result),
+		Running:     build.Building,
+		Duration:    (build.Duration / 1000) / 60,
+		Url:         build.URL,
+		DisplayName: build.FullDisplayName,
 	}
 
 	var buildCause string
