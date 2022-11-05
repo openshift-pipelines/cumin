@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/andygrunwald/go-jira"
 	"github.com/trivago/tgo/tcontainer"
-	"log"
 	"os"
 	"strings"
 )
@@ -127,13 +126,7 @@ func NewJiraClient(baseURL string) (*jira.Client, error) {
 	return jiraClient, nil
 }
 
-func GetVersions(jiraConfig *JiraConfig) ([]JiraVersion, error) {
-	jiraClient, err := NewJiraClient(jiraConfig.BaseURL)
-	if err != nil {
-		return nil, err
-	}
-	log.Println("jira client generation successful")
-
+func GetVersions(jiraClient *jira.Client, jiraConfig *JiraConfig) ([]JiraVersion, error) {
 	project, _, err := jiraClient.Project.Get(jiraConfig.Project)
 	if err != nil {
 		return nil, err
@@ -147,4 +140,21 @@ func GetVersions(jiraConfig *JiraConfig) ([]JiraVersion, error) {
 		})
 	}
 	return versions, nil
+}
+
+func GetVersion(jiraClient *jira.Client, jiraConfig *JiraConfig, version string) (*JiraVersion, error) {
+	project, _, err := jiraClient.Project.Get(jiraConfig.Project)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, v := range project.Versions {
+		if v.Name == version {
+			return &JiraVersion{
+				Name:     v.Name,
+				Released: *v.Released,
+			}, nil
+		}
+	}
+	return nil, fmt.Errorf("couldn't find version in jira: %v", version)
 }
