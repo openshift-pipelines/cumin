@@ -1,4 +1,4 @@
-package clone
+package jira
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 )
 
@@ -25,13 +24,7 @@ func Clone(ctx context.Context, jiraConfig *shared.JiraConfig, ghIssueSchema *sh
 	ghClient := shared.NewGitHubClient(ctx, ghToken)
 	log.Println("github client generation successful")
 
-	jiraToken, ok := os.LookupEnv(shared.JiraTokenEnvVar)
-	if !ok {
-		return "", fmt.Errorf("jira token not set in environment variable: %v", shared.JiraTokenEnvVar)
-	}
-	jiraToken = strings.TrimSpace(jiraToken)
-
-	jiraClient, err := shared.NewJiraClient(jiraToken, jiraConfig.BaseURL)
+	jiraClient, err := shared.NewJiraClient(jiraConfig.BaseURL)
 	if err != nil {
 		return "", err
 	}

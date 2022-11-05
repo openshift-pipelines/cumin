@@ -3,7 +3,7 @@ package cmd
 import (
 	"context"
 	"errors"
-	"github.com/concaf/cumin/pkg/clone"
+	"github.com/concaf/cumin/pkg/jira"
 	"github.com/concaf/cumin/pkg/shared"
 	"github.com/spf13/cobra"
 	"log"
@@ -16,7 +16,7 @@ var (
 	priority           string
 	assignee           string
 	addToCurrentSprint bool
-	storyPoints        int
+	storyPoints        float64
 	title              string
 )
 
@@ -54,12 +54,14 @@ cumin clone https://github.com/concaf/cumin/issues/2455 \
 		}
 
 		jiraIssueSchema := shared.JiraIssueSchema{
-			Project:            jiraProject,
-			Labels:             labels,
-			Type:               issueType,
-			FixVersions:        fixVersions,
-			Priority:           priority,
-			Assignee:           assignee,
+			Project:     jiraProject,
+			Labels:      labels,
+			Type:        issueType,
+			FixVersions: fixVersions,
+			Priority:    priority,
+			Assignee: shared.JiraUser{
+				Key: assignee,
+			},
 			AddToCurrentSprint: addToCurrentSprint,
 			StoryPoints:        storyPoints,
 			Title:              title,
@@ -71,7 +73,7 @@ cumin clone https://github.com/concaf/cumin/issues/2455 \
 				return err
 			}
 
-			createdIssue, err := clone.Clone(ctx, &jiraConfig, ghIssueSchema, &jiraIssueSchema)
+			createdIssue, err := jira.Clone(ctx, &jiraConfig, ghIssueSchema, &jiraIssueSchema)
 			if err != nil {
 				return err
 			}
@@ -101,7 +103,7 @@ func init() {
 
 	cloneCmd.Flags().BoolVar(&addToCurrentSprint, "add-to-current-sprint", false, "add the jira issue to current sprint?")
 
-	cloneCmd.Flags().IntVar(&storyPoints, "story-points", 0, "story points to add to the jira issue")
+	cloneCmd.Flags().Float64Var(&storyPoints, "story-points", 0, "story points to add to the jira issue")
 
 	cloneCmd.Flags().StringVar(&title, "title", "", "override the title in the jira issue")
 }

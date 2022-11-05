@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"github.com/andygrunwald/go-jira"
 	"github.com/trivago/tgo/tcontainer"
+	"log"
+	"os"
 	"strings"
 )
 
@@ -14,16 +16,30 @@ type JiraConfig struct {
 }
 
 type JiraIssueSchema struct {
-	Project            string
-	Description        string
-	Labels             []string
-	Type               string
-	FixVersions        []string
+	Key                string // SRVKP-1337
+	Type               string // bug, etc
+	Project            string // SRVKP
 	Priority           string
-	Assignee           string
-	AddToCurrentSprint bool
-	StoryPoints        int
+	Status             string
+	FixVersions        []string
+	Labels             []string
+	Description        string
+	Assignee           JiraUser
+	StoryPoints        float64
 	Title              string
+	AddToCurrentSprint bool
+}
+
+type JiraUser struct {
+	Name        string
+	Email       string
+	DisplayName string
+	Key         string
+}
+
+type JiraVersion struct {
+	Name     string
+	Released bool
 }
 
 func SchemaToJiraIssue(schema *JiraIssueSchema, currentSprintID int) (*jira.Issue, error) {
@@ -66,9 +82,9 @@ func SchemaToJiraIssue(schema *JiraIssueSchema, currentSprintID int) (*jira.Issu
 		}
 	}
 
-	if schema.Assignee != "" {
+	if schema.Assignee.Key != "" {
 		issue.Fields.Assignee = &jira.User{
-			Name: schema.Assignee,
+			Name: schema.Assignee.Key,
 		}
 	}
 
@@ -80,7 +96,7 @@ func SchemaToJiraIssue(schema *JiraIssueSchema, currentSprintID int) (*jira.Issu
 	}
 
 	if schema.StoryPoints != 0 {
-		unknowns["customfield_12310243"] = schema.StoryPoints
+		unknowns[StoryPointsCustomField] = schema.StoryPoints
 	}
 
 	if schema.Description != "" {
@@ -94,7 +110,13 @@ func SchemaToJiraIssue(schema *JiraIssueSchema, currentSprintID int) (*jira.Issu
 	return &issue, nil
 }
 
-func NewJiraClient(token string, baseURL string) (*jira.Client, error) {
+func NewJiraClient(baseURL string) (*jira.Client, error) {
+	token, ok := os.LookupEnv(JiraTokenEnvVar)
+	if !ok {
+		return nil, fmt.Errorf("jira token not set in environment variable: %v", JiraTokenEnvVar)
+	}
+	token = strings.TrimSpace(token)
+
 	jiraAuthTransport := jira.BearerAuthTransport{
 		Token: strings.TrimSpace(token),
 	}
@@ -103,4 +125,26 @@ func NewJiraClient(token string, baseURL string) (*jira.Client, error) {
 		return nil, err
 	}
 	return jiraClient, nil
+}
+
+func GetVersions(jiraConfig *JiraConfig) ([]JiraVersion, error) {
+	jiraClient, err := NewJiraClient(jiraConfig.BaseURL)
+	if err != nil {
+		return nil, err
+	}
+	log.Println("jira client generation successful")
+
+	project, _, err := jiraClient.Project.Get(jiraConfig.Project)
+	if err != nil {
+		return nil, err
+	}
+
+	var versions []JiraVersion
+	for _, version := range project.Versions {
+		versions = append(versions, JiraVersion{
+			Name:     version.Name,
+			Released: *version.Released,
+		})
+	}
+	return versions, nil
 }
