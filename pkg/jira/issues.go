@@ -21,6 +21,7 @@ func ListIssues(ctx context.Context, jiraClient *jira.Client, jiraConfig *shared
 			Status:      issue.Fields.Status.Name,
 			Labels:      issue.Fields.Labels,
 			Description: issue.Fields.Description,
+			Title:       issue.Fields.Summary,
 		}
 		if issue.Fields.Assignee != nil {
 			jiraIssue.Assignee = shared.JiraUser{
