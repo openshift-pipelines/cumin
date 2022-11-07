@@ -14,16 +14,10 @@ var (
 	jql string
 )
 
-// listCmd represents the list command
-var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+// getIssuesCmd represents the list command
+var getIssuesCmd = &cobra.Command{
+	Use:   "issues",
+	Short: "get issues per jql",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
 		jiraConfig := shared.JiraConfig{
@@ -53,10 +47,10 @@ to quickly create a Cobra application.`,
 }
 
 func init() {
-	jiraCmd.AddCommand(listCmd)
+	getCmd.AddCommand(getIssuesCmd)
 
-	listCmd.Flags().StringVar(&jql, "jql", "", "query in jql")
-	if err := listCmd.MarkFlagRequired("jql"); err != nil {
+	getIssuesCmd.Flags().StringVar(&jql, "jql", "", "query in jql")
+	if err := getIssuesCmd.MarkFlagRequired("jql"); err != nil {
 		log.Println(err)
 		return
 	}
