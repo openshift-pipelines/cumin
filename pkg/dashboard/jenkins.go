@@ -41,6 +41,7 @@ type JenkinsBuildView struct {
 	Url         string
 	Previous    string
 	DisplayName string
+	Timestamp   int64
 	Extra       interface{}
 }
 
@@ -459,6 +460,7 @@ func GetBuildView(jobUrl, username, password string) (*JenkinsBuildView, error) 
 		Duration:    (build.Duration / 1000) / 60,
 		Url:         build.URL,
 		DisplayName: build.FullDisplayName,
+		Timestamp:   build.Timestamp,
 	}
 
 	var buildCause string
