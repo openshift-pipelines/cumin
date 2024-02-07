@@ -3,8 +3,6 @@ package dashboard
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/concaf/cumin/pkg/shared"
-	"github.com/xanzy/go-gitlab"
 	"io"
 	"log"
 	"net/http"
@@ -12,6 +10,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/concaf/cumin/pkg/shared"
+	"github.com/xanzy/go-gitlab"
 )
 
 type GitLabMergeRequest struct {
@@ -45,10 +46,10 @@ type JenkinsBuildView struct {
 	Extra       interface{}
 }
 
-func GenerateEndToEndFlow(username, password, baseUrl, cvpUrl, checkMergedUrl string, generateNum int) ([]EndToEndFlow, error) {
+func GenerateEndToEndFlow(username, password, baseUrl, cvpUrl, checkMergedUrl string, insecure bool, generateNum int) ([]EndToEndFlow, error) {
 	var e2eFlows []EndToEndFlow
 	for i := 1; i <= generateNum; i++ {
-		e2eFlow, err := GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMergedUrl)
+		e2eFlow, err := GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMergedUrl, insecure)
 		if err != nil {
 			return nil, err
 		}
@@ -63,8 +64,8 @@ func GenerateEndToEndFlow(username, password, baseUrl, cvpUrl, checkMergedUrl st
 
 // GenerateEndToEndFlowSingle
 // baseUrl is something like https://<jenkins url>/job/pipelines-1.8-rhel-8/
-func GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMergedUrl string) (*EndToEndFlow, error) {
-	checkMerged, err := GetBuildView(checkMergedUrl, username, password)
+func GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMergedUrl string, insecure bool) (*EndToEndFlow, error) {
+	checkMerged, err := GetBuildView(checkMergedUrl, insecure, username, password)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +73,7 @@ func GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMerged
 		CheckMerged: checkMerged,
 	}
 
-	glMr, err := getMRFromCheckMerged(username, password, checkMergedUrl)
+	glMr, err := getMRFromCheckMerged(username, password, checkMergedUrl, insecure)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ func GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMerged
 		return nil, err
 	}
 
-	buildPipelineJson, statusCode, err := shared.GetBuildJson(latestBuildPipelineUrl, username, password)
+	buildPipelineJson, statusCode, err := shared.GetBuildJson(latestBuildPipelineUrl, insecure, username, password)
 	if !shared.IsStatusCodeOK(statusCode) {
 		log.Printf("non-OK status code (%v) received for: %v", statusCode, latestBuildPipelineUrl)
 		return nil, nil
@@ -100,7 +101,7 @@ func GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMerged
 		return nil, err
 	}
 
-	matchingBuildPipelineUrl, err := matchBuildWithParent(username, password, "check-merged", checkMerged.Number, buildPipelineJson)
+	matchingBuildPipelineUrl, err := matchBuildWithParent(username, password, "check-merged", checkMerged.Number, buildPipelineJson, insecure)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +110,7 @@ func GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMerged
 		return &e2eFlow, nil
 	}
 
-	buildPipeline, err := GetBuildView(matchingBuildPipelineUrl, username, password)
+	buildPipeline, err := GetBuildView(matchingBuildPipelineUrl, insecure, username, password)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +122,7 @@ func GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMerged
 		return nil, err
 	}
 
-	childJobs, err := getChildJobUrls(username, password, buildPipelineJobsViewUrl)
+	childJobs, err := getChildJobUrls(username, password, buildPipelineJobsViewUrl, insecure)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +139,7 @@ func GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMerged
 			return nil, err
 		}
 
-		jobBuildJson, statusCode, err := shared.GetBuildJson(lastJobBuild, username, password)
+		jobBuildJson, statusCode, err := shared.GetBuildJson(lastJobBuild, insecure, username, password)
 		if err != nil {
 			return nil, err
 		}
@@ -147,13 +148,13 @@ func GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMerged
 			continue
 		}
 
-		jobUrl, err := matchBuildWithParent(username, password, "build-pipeline", buildPipeline.Number, jobBuildJson)
+		jobUrl, err := matchBuildWithParent(username, password, "build-pipeline", buildPipeline.Number, jobBuildJson, insecure)
 		if err != nil {
 			return nil, err
 		}
 		if jobUrl != "" {
 			if strings.Contains(jobUrl, "job/openshift-pipelines-operator-bundle") {
-				operatorBundleBuild, statusCode, err = shared.GetBuildJson(jobUrl, username, password)
+				operatorBundleBuild, statusCode, err = shared.GetBuildJson(jobUrl, insecure, username, password)
 				if err != nil {
 					return nil, err
 				}
@@ -162,7 +163,7 @@ func GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMerged
 					return nil, fmt.Errorf("non-OK status code (%v) received for: %v", statusCode, jobUrl)
 				}
 			}
-			jobBuildView, err := GetBuildView(jobUrl, username, password)
+			jobBuildView, err := GetBuildView(jobUrl, insecure, username, password)
 			if err != nil {
 				return nil, err
 			}
@@ -175,7 +176,7 @@ func GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMerged
 	if err != nil {
 		return nil, err
 	}
-	releasePipelineJson, statusCode, err := shared.GetBuildJson(releasePipelineUrl, username, password)
+	releasePipelineJson, statusCode, err := shared.GetBuildJson(releasePipelineUrl, insecure, username, password)
 	if err != nil {
 		return nil, err
 	}
@@ -183,12 +184,12 @@ func GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMerged
 		log.Printf("non-OK status code (%v) for release pipeline url: %v, ignoring...", statusCode, releasePipelineUrl)
 		return nil, nil
 	}
-	matchedReleasePipeline, err := matchBuildWithParent(username, password, "build-pipeline", buildPipeline.Number, releasePipelineJson)
+	matchedReleasePipeline, err := matchBuildWithParent(username, password, "build-pipeline", buildPipeline.Number, releasePipelineJson, insecure)
 	if err != nil {
 		return nil, err
 	}
 	if matchedReleasePipeline != "" {
-		releasePipelineView, err := GetBuildView(matchedReleasePipeline, username, password)
+		releasePipelineView, err := GetBuildView(matchedReleasePipeline, insecure, username, password)
 		if err != nil {
 			return nil, err
 		}
@@ -209,12 +210,12 @@ func GenerateEndToEndFlowSingle(username, password, baseUrl, cvpUrl, checkMerged
 		log.Printf("operator-bundle build (%v) found for build-pipeline (%v) failed (%v)", operatorBundleBuild.URL, buildPipeline.Url, operatorBundleBuild.Result)
 		return &e2eFlow, nil
 	}
-	matchingCVPBuild, err := findCVPFromBundleJob(cvpJobUrl, operatorBundleBuild)
+	matchingCVPBuild, err := findCVPFromBundleJob(cvpJobUrl, insecure, operatorBundleBuild)
 	if err != nil {
 		return nil, err
 	}
 	if matchingCVPBuild != "" {
-		cvpBuildView, err := GetBuildView(matchingCVPBuild, "", "")
+		cvpBuildView, err := GetBuildView(matchingCVPBuild, insecure, "", "")
 		if err != nil {
 			return nil, err
 		}
@@ -258,8 +259,8 @@ func GetIndexImagesFromUrl(cvpJobUrl string) ([]string, error) {
 	return indexImages, nil
 }
 
-func getMRFromCheckMerged(username, password, checkMergedUrl string) (*GitLabMergeRequest, error) {
-	checkMergedJson, statusCode, err := shared.GetBuildJson(checkMergedUrl, username, password)
+func getMRFromCheckMerged(username, password, checkMergedUrl string, insecure bool) (*GitLabMergeRequest, error) {
+	checkMergedJson, statusCode, err := shared.GetBuildJson(checkMergedUrl, insecure, username, password)
 	if err != nil {
 		return nil, err
 	}
@@ -317,7 +318,7 @@ func getMRFromCheckMerged(username, password, checkMergedUrl string) (*GitLabMer
 
 // findCVPFromBundleJob we don't need creds to talk to cvp
 // cvpUrl := https://<jenkins url>/view/all/job/cvp-redhat-operator-bundle-image-validation-test/
-func findCVPFromBundleJob(cvpJobUrl string, operatorBundleBuild *shared.JenkinsBuild) (string, error) {
+func findCVPFromBundleJob(cvpJobUrl string, insecure bool, operatorBundleBuild *shared.JenkinsBuild) (string, error) {
 	type brewBuildNVR struct {
 		NVR string `json:"nvr"`
 	}
@@ -347,7 +348,7 @@ func findCVPFromBundleJob(cvpJobUrl string, operatorBundleBuild *shared.JenkinsB
 		return "", fmt.Errorf("could not find nvr in brew_build_info parameter in build %v", operatorBundleBuild.URL)
 	}
 
-	cvpBuildJson, statusCode, err := shared.GetBuildJson(cvpJobUrl, "", "")
+	cvpBuildJson, statusCode, err := shared.GetBuildJson(cvpJobUrl, insecure, "", "")
 	if err != nil {
 		return "", err
 	}
@@ -375,7 +376,7 @@ func findCVPFromBundleJob(cvpJobUrl string, operatorBundleBuild *shared.JenkinsB
 
 	if !cvpBuildFound {
 		if cvpBuildJson.PreviousBuild.Number > 0 && cvpBuildJson.PreviousBuild.URL != "" {
-			return findCVPFromBundleJob(cvpBuildJson.PreviousBuild.URL, operatorBundleBuild)
+			return findCVPFromBundleJob(cvpBuildJson.PreviousBuild.URL, insecure, operatorBundleBuild)
 		} else {
 			log.Printf("could not find matching cvp build for %v", operatorBundleBuild.FullDisplayName)
 			return "", nil
@@ -384,7 +385,7 @@ func findCVPFromBundleJob(cvpJobUrl string, operatorBundleBuild *shared.JenkinsB
 	return cvpBuildJson.URL, nil
 }
 
-func matchBuildWithParent(username, password, parentJobName string, parentBuildNumber int, childBuild *shared.JenkinsBuild) (string, error) {
+func matchBuildWithParent(username, password, parentJobName string, parentBuildNumber int, childBuild *shared.JenkinsBuild, insecure bool) (string, error) {
 	childBuildFound := false
 	for _, action := range childBuild.Actions {
 		for _, cause := range action.Causes {
@@ -405,14 +406,14 @@ func matchBuildWithParent(username, password, parentJobName string, parentBuildN
 	if !childBuildFound {
 		// if the previous build exists, try to match it
 		if childBuild.PreviousBuild.Number > 0 && childBuild.PreviousBuild.URL != "" {
-			previousBuildPipelineJson, statusCode, err := shared.GetBuildJson(childBuild.PreviousBuild.URL, username, password)
+			previousBuildPipelineJson, statusCode, err := shared.GetBuildJson(childBuild.PreviousBuild.URL, insecure, username, password)
 			if err != nil {
 				return "", err
 			}
 			if !shared.IsStatusCodeOK(statusCode) {
 				return "", fmt.Errorf("non-OK status code (%v) for build: %v", statusCode, childBuild.PreviousBuild.URL)
 			}
-			return matchBuildWithParent(username, password, parentJobName, parentBuildNumber, previousBuildPipelineJson)
+			return matchBuildWithParent(username, password, parentJobName, parentBuildNumber, previousBuildPipelineJson, insecure)
 		} else {
 			log.Printf("no matching child build (%v) found for parent build (%v) %v", childBuild.FullDisplayName, parentJobName, parentBuildNumber)
 			return "", nil
@@ -421,8 +422,8 @@ func matchBuildWithParent(username, password, parentJobName string, parentBuildN
 	return childBuild.URL, nil
 }
 
-func getChildJobUrls(username, password, listViewUrl string) ([]string, error) {
-	listView, err := shared.GetListViewJson(listViewUrl, username, password)
+func getChildJobUrls(username, password, listViewUrl string, insecure bool) ([]string, error) {
+	listView, err := shared.GetListViewJson(listViewUrl, insecure, username, password)
 	if err != nil {
 		return nil, err
 	}
@@ -434,13 +435,13 @@ func getChildJobUrls(username, password, listViewUrl string) ([]string, error) {
 	return urls, nil
 }
 
-func GetBuildView(jobUrl, username, password string) (*JenkinsBuildView, error) {
+func GetBuildView(jobUrl string, insecure bool, username, password string) (*JenkinsBuildView, error) {
 	parsedUrl, err := url.Parse(jobUrl)
 	if err != nil {
 		return nil, err
 	}
 
-	build, statusCode, err := shared.GetBuildJson(jobUrl, username, password)
+	build, statusCode, err := shared.GetBuildJson(jobUrl, insecure, username, password)
 	if err != nil {
 		return nil, err
 	}
@@ -478,11 +479,11 @@ func GetBuildView(jobUrl, username, password string) (*JenkinsBuildView, error) 
 	return &buildView, nil
 }
 
-func GenerateBuildViews(jobUrl, username, password string, generateNum int) ([]*JenkinsBuildView, error) {
+func GenerateBuildViews(jobUrl string, insecure bool, username, password string, generateNum int) ([]*JenkinsBuildView, error) {
 	var buildViews []*JenkinsBuildView
 
 	for i := 1; i <= generateNum; i++ {
-		currentBuildView, err := GetBuildView(jobUrl, username, password)
+		currentBuildView, err := GetBuildView(jobUrl, insecure, username, password)
 		if err != nil {
 			return nil, err
 		}

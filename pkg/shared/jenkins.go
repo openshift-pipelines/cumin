@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"io"
 	"log"
@@ -53,14 +54,14 @@ type JenkinsListView struct {
 	URL      string        `json:"url"`
 }
 
-func GetListViewJson(listViewUrl, username, password string) (*JenkinsListView, error) {
+func GetListViewJson(listViewUrl string, insecure bool, username, password string) (*JenkinsListView, error) {
 	listViewUrl, err := url.JoinPath(listViewUrl, "/api/json")
 	if err != nil {
 		return nil, err
 	}
 
 	var listView JenkinsListView
-	_, err = GetAndUnmarshalUrl(listViewUrl, username, password, &listView)
+	_, err = GetAndUnmarshalUrl(listViewUrl, insecure, username, password, &listView)
 	if err != nil {
 		return nil, err
 	}
@@ -69,14 +70,14 @@ func GetListViewJson(listViewUrl, username, password string) (*JenkinsListView, 
 }
 
 // GetBuildJson returns Build, status code, error
-func GetBuildJson(buildURL, username, password string) (*JenkinsBuild, int, error) {
+func GetBuildJson(buildURL string, insecure bool, username, password string) (*JenkinsBuild, int, error) {
 	buildURL, err := url.JoinPath(buildURL, "/api/json")
 	if err != nil {
 		return nil, 0, err
 	}
 
 	var build JenkinsBuild
-	statusCode, err := GetAndUnmarshalUrl(buildURL, username, password, &build)
+	statusCode, err := GetAndUnmarshalUrl(buildURL, insecure, username, password, &build)
 	if err != nil {
 		return nil, statusCode, err
 	}
@@ -84,12 +85,19 @@ func GetBuildJson(buildURL, username, password string) (*JenkinsBuild, int, erro
 	return &build, statusCode, nil
 }
 
-func GetAndUnmarshalUrl(jenkinsUrl, username, password string, unmarshalTo interface{}) (int, error) {
-	log.Printf("fetching json from %v", jenkinsUrl)
+func GetAndUnmarshalUrl(jenkinsUrl string, insecure bool, username, password string, unmarshalTo interface{}) (int, error) {
+	log.Printf("fetching json from %v, insecureSkipVerify:%v", jenkinsUrl, insecure)
 
 	client := &http.Client{
 		Timeout: time.Second * 20,
 	}
+
+	if insecure {
+		customTransport := http.DefaultTransport.(*http.Transport).Clone()
+		customTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		client.Transport = customTransport
+	}
+
 	req, err := http.NewRequest("GET", jenkinsUrl, nil)
 	if err != nil {
 		return 0, err

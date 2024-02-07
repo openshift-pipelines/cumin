@@ -2,15 +2,17 @@ package cmd
 
 import (
 	"fmt"
+	"log"
+	"strings"
+
 	"github.com/concaf/cumin/pkg/dashboard"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
-	"log"
-	"strings"
 )
 
 var (
 	buildURL                string
+	insecureBuildURL        bool
 	viewGenerateNum         int
 	viewLastSuccessfulBuild bool
 	getIndexImages          bool
@@ -21,7 +23,7 @@ var buildViewCmd = &cobra.Command{
 	Use:   "build-view",
 	Short: "jenkins build view",
 	Run: func(cmd *cobra.Command, args []string) {
-		buildViews, err := dashboard.GenerateBuildViews(buildURL, jenkinsUsername, jenkinsPassword, viewGenerateNum)
+		buildViews, err := dashboard.GenerateBuildViews(buildURL, insecureBuildURL, jenkinsUsername, jenkinsPassword, viewGenerateNum)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -41,7 +43,7 @@ var buildViewCmd = &cobra.Command{
 			splitUrl = append(splitUrl, "lastSuccessfulBuild")
 			lastSuccessfulUrl := strings.Join(splitUrl, "/")
 
-			lastSuccessfulView, err := dashboard.GetBuildView(lastSuccessfulUrl, jenkinsUsername, jenkinsPassword)
+			lastSuccessfulView, err := dashboard.GetBuildView(lastSuccessfulUrl, insecureBuildURL, jenkinsUsername, jenkinsPassword)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -77,6 +79,7 @@ func init() {
 
 	buildViewCmd.Flags().StringVar(&buildURL, "build", "", "url for the jenkins build")
 	buildViewCmd.MarkFlagRequired("build")
+	buildViewCmd.Flags().BoolVar(&insecureBuildURL, "insecure", true, "insecure skip verify")
 	buildViewCmd.Flags().IntVar(&viewGenerateNum, "generate-num", 3, "number of views to generate")
 	buildViewCmd.Flags().BoolVar(&viewLastSuccessfulBuild, "last-successful-build", true, "do you want to generate the last successful build as well?")
 	buildViewCmd.Flags().BoolVar(&getIndexImages, "index-images", false, "get index images for cvp job urls?")

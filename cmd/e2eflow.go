@@ -5,10 +5,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/concaf/cumin/pkg/dashboard"
-	"gopkg.in/yaml.v3"
 	"log"
 	"net/url"
+
+	"github.com/concaf/cumin/pkg/dashboard"
+	"gopkg.in/yaml.v3"
 
 	"github.com/spf13/cobra"
 )
@@ -16,6 +17,7 @@ import (
 var (
 	baseUrl             string
 	cvpUrl              string
+	insecureFlowUrl     bool
 	checkMergedNum      string
 	generateNum         int
 	lastSuccessfulBuild bool
@@ -30,7 +32,7 @@ var e2eflowCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		e2eFlow, err := dashboard.GenerateEndToEndFlow(jenkinsUsername, jenkinsPassword, baseUrl, cvpUrl, checkMergedUrl, generateNum)
+		e2eFlow, err := dashboard.GenerateEndToEndFlow(jenkinsUsername, jenkinsPassword, baseUrl, cvpUrl, checkMergedUrl, insecureFlowUrl, generateNum)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -48,7 +50,7 @@ var e2eflowCmd = &cobra.Command{
 			if err != nil {
 				log.Fatal(err)
 			}
-			lastSuccessfulFlow, err := dashboard.GenerateEndToEndFlowSingle(jenkinsUsername, jenkinsPassword, baseUrl, cvpUrl, lastSuccessfulUrl)
+			lastSuccessfulFlow, err := dashboard.GenerateEndToEndFlowSingle(jenkinsUsername, jenkinsPassword, baseUrl, cvpUrl, lastSuccessfulUrl, insecureFlowUrl)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -72,6 +74,8 @@ func init() {
 
 	e2eflowCmd.Flags().StringVar(&cvpUrl, "cvp", "", "url of cvp jenkins, e.g. https://<jenkins url>/view/all/job/cvp-redhat-operator-bundle-image-validation-test/")
 	e2eflowCmd.MarkFlagRequired("cvp")
+
+	e2eflowCmd.Flags().BoolVar(&insecureFlowUrl, "insecure", true, "insecure skip verify")
 
 	e2eflowCmd.Flags().StringVar(&checkMergedNum, "check-merged", "lastBuild", "number of check-merged job")
 	e2eflowCmd.Flags().IntVar(&generateNum, "generate-num", 3, "number of builds to generate")
